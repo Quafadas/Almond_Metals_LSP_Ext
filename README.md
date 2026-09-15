@@ -97,3 +97,10 @@ Many scripts will emit warnings which assume they are relevant in the full proje
 ```
 
 which pollute the Problems tab.
+
+### Scala Version
+The Juypter Kernel has a scala version that it uses. 
+
+The scala-notebook shadown has a scala version that it uses. 
+
+These must be kept in sync by the user - if they don't match, there may be hard to diagnose mismatches between compile / runtime behaviour.

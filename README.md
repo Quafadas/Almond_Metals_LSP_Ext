@@ -1,6 +1,8 @@
 # Scala Notebook Shadow (POC)
 
-Explores "concept 2" in this discussion / design doc https://github.com/scalameta/metals/issues/4434. 
+Explores "concept 2" in this discussion / design doc https://github.com/scalameta/metals/issues/4434, of emitting the Notebooks as a script. 
+
+Conclusion: Moderately successful (I'm using it) - LSP support, but with some warts that are a consequence of the design. 
 
 ## Concept
 

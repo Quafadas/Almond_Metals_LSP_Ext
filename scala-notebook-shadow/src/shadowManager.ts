@@ -34,6 +34,8 @@ export interface ShadowState {
   wrapperObjectName: string;
   mapping: ShadowMapping;
   appliedText: string | undefined;
+  /** True when `appliedText` was applied to the buffer but not yet written to disk. */
+  dirty: boolean;
   closed: boolean;
   debounceHandle: NodeJS.Timeout | undefined;
 }
@@ -367,6 +369,7 @@ export class ShadowManager implements vscode.Disposable {
       wrapperObjectName: baseName,
       mapping,
       appliedText: text,
+      dirty: false,
       closed: false,
       debounceHandle: undefined,
     };
@@ -396,7 +399,7 @@ export class ShadowManager implements vscode.Disposable {
 
   /** Regenerate + save the shadow document. `force` bypasses the unchanged-text short-circuit. */
   async regenerate(notebook: vscode.NotebookDocument, force: boolean): Promise<void> {
-    await this.updateShadow(notebook, force, true);
+    await this.updateShadow(notebook, force, true, true);
   }
 
   /**
@@ -451,7 +454,7 @@ export class ShadowManager implements vscode.Disposable {
 
     for (const notebook of notebooks) {
       try {
-        await this.updateShadow(notebook, true, false);
+        await this.updateShadow(notebook, true, false, true);
       } catch (error) {
         this.log.error(`Failed to regenerate ${notebook.uri.fsPath} after a settings change: ${describeError(error)}`);
         this.log.debug(() => errorStack(error));
@@ -471,10 +474,20 @@ export class ShadowManager implements vscode.Disposable {
       clearTimeout(state.debounceHandle);
       state.debounceHandle = undefined;
     }
-    await this.updateShadow(notebook, false, false);
+    // Not saved: a language feature request (completion, hover) fires on nearly every
+    // keystroke, and Metals sees the edit via the in-memory document either way. Writing
+    // that to disk on every keystroke is issue #32 - it defeats the debounce above, since
+    // this is the very path the debounce exists to keep off the hot typing loop. The next
+    // debounced regenerate() saves once the burst settles.
+    await this.updateShadow(notebook, false, false, false);
   }
 
-  private async updateShadow(notebook: vscode.NotebookDocument, force: boolean, compile: boolean): Promise<void> {
+  private async updateShadow(
+    notebook: vscode.NotebookDocument,
+    force: boolean,
+    compile: boolean,
+    save: boolean
+  ): Promise<void> {
     const state = this.states.get(notebook.uri.toString());
     if (!state) {
       return;
@@ -488,6 +501,16 @@ export class ShadowManager implements vscode.Disposable {
     });
 
     if (!force && text === state.appliedText) {
+      // The buffer already matches; still honour a pending save so a burst of unsaved
+      // language-feature updates isn't left dangling once the debounce catches up.
+      if (save && state.dirty) {
+        const doc = await vscode.workspace.openTextDocument(state.shadowUri);
+        await doc.save();
+        state.dirty = false;
+        if (compile) {
+          await this.cascadeCompile();
+        }
+      }
       return;
     }
 
@@ -500,9 +523,12 @@ export class ShadowManager implements vscode.Disposable {
     const edit = new vscode.WorkspaceEdit();
     edit.replace(state.shadowUri, fullRange, text);
     await vscode.workspace.applyEdit(edit);
-    await doc.save();
+    if (save) {
+      await doc.save();
+    }
 
     state.appliedText = text;
+    state.dirty = !save;
     state.mapping = mapping;
     this.indexCells(state);
     this.log.debug(

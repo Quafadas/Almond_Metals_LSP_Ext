@@ -99,7 +99,7 @@
         "scalaNotebook.almondVersion": {
           "type": "string",
           "default": "0.14.5",
-          "description": "Almond version whose predef the shadow file reproduces: adds a `//> using dep sh.almond::jupyter-api:<version>` directive, a `//> using repository` for JitPack, and Almond's predef imports (Markdown, Html, publish, ...) before the first cell. Set to an empty string to leave the prelude out."
+          "description": "Almond version whose predef the shadow file reproduces: adds a `//> using dep sh.almond::jupyter-api:<version>` directive, a `//> using jar` for the extension's vendored jvm-repr jar, and Almond's predef imports (Markdown, Html, publish, ...) before the first cell. Set to an empty string to leave the prelude out."
         },
         "scalaNotebook.ammoniteVersion": {
           "type": "string",

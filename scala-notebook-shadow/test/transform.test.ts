@@ -175,6 +175,7 @@ test("almondVersion adds the kernel API dependency, JitPack and the predef impor
   const { text, mapping } = transform(cells, { ...baseConfig, almondVersion: "0.14.5" });
   const lines = text.split("\n");
 
+  // No jvmReprJarPath configured: falls back to resolving jvm-repr from JitPack.
   assert.ok(text.includes("//> using repository https://jitpack.io\n"));
   assert.ok(text.includes("//> using dep sh.almond::jupyter-api:0.14.5\n"));
 
@@ -186,6 +187,20 @@ test("almondVersion adds the kernel API dependency, JitPack and the predef impor
   // Everything the prelude emits is header, so the cell still maps to its own lines.
   assert.ok(lines[mapping.headerLines].startsWith(`/* --- cell 0 ${cells[0].uri.fragment} */`));
   assert.equal(lines[mapping.spans[0].startLine], 'Markdown("# Hello World"))');
+});
+
+test("jvmReprJarPath, when configured, replaces the JitPack resolver with a jar directive", () => {
+  const cells = [cell(0, 'Markdown("# Hello World")\n')];
+  const { text } = transform(cells, {
+    ...baseConfig,
+    almondVersion: "0.14.5",
+    jvmReprJarPath: "/opt/ext/vendor/jvm-repr-0.4.0.jar",
+  });
+
+  assert.ok(!text.includes("jitpack"));
+  assert.ok(!text.includes("//> using repository"));
+  assert.ok(text.includes("//> using jar /opt/ext/vendor/jvm-repr-0.4.0.jar\n"));
+  assert.ok(text.includes("//> using dep sh.almond::jupyter-api:0.14.5\n"));
 });
 
 test("ammoniteVersion adds the Ammonite API dependency and the repl/interp bridges", () => {

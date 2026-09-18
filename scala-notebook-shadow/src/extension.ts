@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import { CONFIG_DEFAULTS, SHADOW_TEXT_SETTINGS } from "./configDefaults";
+import { CONFIG_DEFAULTS, SHADOW_TEXT_SETTINGS, VENDORED_JVM_REPR_JAR } from "./configDefaults";
 import { LanguageFeatureRelay, RUN_SHADOW_COMMAND, ShadowCommandArgs } from "./languageFeatures";
 import { isLogLevel, LogLevel, Logger } from "./log";
 import { DiagnosticRelay } from "./relay";
@@ -10,7 +10,7 @@ function readLogLevel(cfg: vscode.WorkspaceConfiguration): LogLevel {
   return isLogLevel(value) ? value : CONFIG_DEFAULTS.logLevel;
 }
 
-function readConfig(): ExtensionConfig {
+function readConfig(context: vscode.ExtensionContext): ExtensionConfig {
   const cfg = vscode.workspace.getConfiguration("scalaNotebook");
   return {
     logLevel: readLogLevel(cfg),
@@ -21,6 +21,9 @@ function readConfig(): ExtensionConfig {
     preamble: cfg.get<string[]>("preamble", CONFIG_DEFAULTS.preamble),
     almondVersion: cfg.get<string>("almondVersion", CONFIG_DEFAULTS.almondVersion ?? ""),
     ammoniteVersion: cfg.get<string>("ammoniteVersion", CONFIG_DEFAULTS.ammoniteVersion ?? ""),
+    // Vendored rather than resolved from JitPack (see VENDORED_JVM_REPR_JAR); an absolute
+    // path so it resolves the same regardless of where the shadow file ends up on disk.
+    jvmReprJarPath: context.asAbsolutePath(VENDORED_JVM_REPR_JAR),
     shadowDir: cfg.get<string>("shadowDir", CONFIG_DEFAULTS.shadowDir),
     debounceMs: cfg.get<number>("debounceMs", CONFIG_DEFAULTS.debounceMs),
     compileOnSave: cfg.get<boolean>("compileOnSave", CONFIG_DEFAULTS.compileOnSave),
@@ -52,10 +55,12 @@ export function activate(context: vscode.ExtensionContext): void {
   let logLevel = readLogLevel(vscode.workspace.getConfiguration("scalaNotebook"));
   const log = new Logger(output, () => logLevel);
 
+  const boundReadConfig = () => readConfig(context);
+
   const collection = vscode.languages.createDiagnosticCollection("scala-notebook");
-  const shadowManager = new ShadowManager(collection, readConfig, log.scoped("shadow"));
+  const shadowManager = new ShadowManager(collection, boundReadConfig, log.scoped("shadow"));
   const relay = new DiagnosticRelay(collection, shadowManager, log.scoped("diagnostics"));
-  const languageFeatures = new LanguageFeatureRelay(shadowManager, log.scoped("language"), readConfig);
+  const languageFeatures = new LanguageFeatureRelay(shadowManager, log.scoped("language"), boundReadConfig);
   const scalaNotebookCells: vscode.DocumentSelector = [
     { language: "scala", notebookType: "jupyter-notebook" },
   ];

@@ -130,9 +130,9 @@ re-indented — one line per source line, so a cell's line *N* is always the sha
 
 ```scala
 //> using scala 3.7.2
-//> using repository https://jitpack.io            # JitPack for the prelude, plus `import $repo`
 //> using dep com.lihaoyi:ammonite-repl-api_3.3.7:3.0.8   # prelude + config `mvnDeps` + `$ivy`
 //> using dep sh.almond::jupyter-api:0.14.5
+//> using jar /path/to/extension/vendor/jvm-repr-0.4.0.jar   # vendored; see below
 //> using dep com.lihaoyi::os-lib:0.11.3
 //> using option "-Wconf:msg=A pure expression does nothing in statement position:s"  # quoted: the value has spaces
 object sample {                                    # named after the shadow file
@@ -276,8 +276,14 @@ both, ahead of any `scalaNotebook.preamble` lines:
 | `scalaNotebook.ammoniteVersion` | `com.lihaoyi:ammonite-repl-api_3.3.7:<version>` | `interp`, `repl`, `show`, `codeColorsImplicit`, `tprintColorsImplicit` |
 | `scalaNotebook.almondVersion` | `sh.almond::jupyter-api:<version>` | `kernel`, `publish`, `commHandler`, `display`, `Markdown`/`Html`/`Image`/… , `Input`, `DisplayDataSyntax` |
 
-The Almond half also adds JitPack to `repositories`: `com.github.jupyter:jvm-repr`, which
-`jupyter-api` depends on, is published nowhere else.
+The Almond half also adds a `//> using jar` for `com.github.jupyter:jvm-repr`, which
+`jupyter-api` depends on and which is published nowhere but JitPack (confirmed: absent from
+Maven Central, and the `maven.scijava.org` mirror only carries 0.2.1/0.3.1, not the 0.4.0
+`jupyter-api` pins to). Rather than add the JitPack resolver to every generated shadow -
+which some networks block - the extension vendors that one jar under `vendor/` and points
+`//> using jar` straight at it (`jvmReprJarPath` in transform.ts, wired from
+`context.asAbsolutePath` in extension.ts). `jvmReprJarPath` left unset - as it is for any
+other caller of `transform()` - falls back to the JitPack repository directive.
 
 *Why `jupyter-api`, not the `scala-kernel-api` a notebook's `import $ivy` would name.* `jupyter-api`
 is cross-published against the Scala *binary* version (`_3`), so it resolves for whatever

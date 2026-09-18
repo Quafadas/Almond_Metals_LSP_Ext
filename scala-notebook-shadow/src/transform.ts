@@ -30,6 +30,13 @@ export interface ScalaNotebookConfig {
    */
   almondVersion?: string;
   /**
+   * Absolute path to a local `com.github.jupyter:jvm-repr:0.4.0` jar, which `jupyter-api`
+   * depends on but which is published nowhere but JitPack (see `JITPACK_REPOSITORY`).
+   * Given, it is added with `//> using jar` instead of pulling the JitPack resolver in;
+   * left undefined, the shadow falls back to `//> using repository https://jitpack.io`.
+   */
+  jvmReprJarPath?: string;
+  /**
    * Where the notebook sits relative to the shadow file's own directory, POSIX-separated
    * (`../analysis`, or "" when the two share a directory).
    *
@@ -152,7 +159,12 @@ function almondApiCoordinate(version: string): string {
   return `sh.almond::jupyter-api:${version}`;
 }
 
-/** `com.github.jupyter:jvm-repr`, which `jupyter-api` depends on, is only published here. */
+/**
+ * `com.github.jupyter:jvm-repr`, which `jupyter-api` depends on, is only published here -
+ * confirmed against Maven Central (no hits) and the mirror at maven.scijava.org, which
+ * carries 0.2.1 and 0.3.1 but not the 0.4.0 that `jupyter-api` pins to. Used only as a
+ * fallback when the caller has not vendored the jar itself (see `jvmReprJarPath`).
+ */
 const JITPACK_REPOSITORY = "https://jitpack.io";
 
 /**
@@ -212,6 +224,7 @@ const ALMOND_PRELUDE = [
 interface Prelude {
   mvnDeps: string[];
   repositories: string[];
+  jars: string[];
   preamble: string[];
 }
 
@@ -221,7 +234,7 @@ interface Prelude {
  * of the same name would win.
  */
 function prelude(config: ScalaNotebookConfig): Prelude {
-  const result: Prelude = { mvnDeps: [], repositories: [], preamble: [] };
+  const result: Prelude = { mvnDeps: [], repositories: [], jars: [], preamble: [] };
 
   const ammoniteVersion = config.ammoniteVersion?.trim();
   if (ammoniteVersion) {
@@ -232,7 +245,12 @@ function prelude(config: ScalaNotebookConfig): Prelude {
   const almondVersion = config.almondVersion?.trim();
   if (almondVersion) {
     result.mvnDeps.push(almondApiCoordinate(almondVersion));
-    result.repositories.push(JITPACK_REPOSITORY);
+    const jvmReprJarPath = config.jvmReprJarPath?.trim();
+    if (jvmReprJarPath) {
+      result.jars.push(jvmReprJarPath);
+    } else {
+      result.repositories.push(JITPACK_REPOSITORY);
+    }
     result.preamble.push(...ALMOND_PRELUDE);
   }
 
@@ -706,6 +724,9 @@ function directiveValue(value: string): string {
  * dependency is its own directive rather than an item under a key. That holds for the
  * `-Wconf`s too: scala-cli takes one `option` value per directive.
  *
+ * `jars` are local jar paths - currently only a vendored `jvm-repr` (see `jvmReprJarPath`) -
+ * placed right after the deps that may need them on the classpath.
+ *
  * `resourceDirs` are the directories a cell's `import $cp` named (see `collectClasspath`),
  * placed with the deps: like them, they are a classpath entry the notebook asked for rather
  * than something the shadow file needs for its own sake.
@@ -720,6 +741,7 @@ function header(
   scalaVersion: string,
   repositories: string[],
   deps: string[],
+  jars: string[],
   resourceDirs: string[],
   cellDirectives: string[]
 ): string[] {
@@ -727,6 +749,7 @@ function header(
     `//> using scala ${directiveValue(scalaVersion)}`,
     ...repositories.map((repository) => `//> using repository ${directiveValue(repository)}`),
     ...deps.map((dep) => `//> using dep ${directiveValue(dep)}`),
+    ...jars.map((jar) => `//> using jar ${directiveValue(jar)}`),
     ...resourceDirs.map((dir) => `//> using resourceDir ${directiveValue(dir)}`),
     ...SUPPRESSED_WARNINGS.map((wconf) => `//> using option ${directiveValue(wconf)}`),
     ...cellDirectives,
@@ -777,6 +800,7 @@ export function transform(cells: SourceCell[], config: ScalaNotebookConfig): Tra
     config.scalaVersion,
     repositories,
     allDeps,
+    dedupe(predef.jars),
     dedupe(magic.resourceDirs),
     cellDirectives
   );

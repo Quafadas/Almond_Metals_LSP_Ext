@@ -1,6 +1,15 @@
 import type { ExtensionConfig } from "./shadowManager";
 
 /**
+ * Where the vendored `com.github.jupyter:jvm-repr:0.4.0` jar sits, relative to the extension
+ * root. Resolved to an absolute path with `context.asAbsolutePath` in `extension.ts` and fed
+ * to `transform` as `jvmReprJarPath`, so a shadow's `//> using jar` names it directly instead
+ * of pulling the JitPack resolver in for a dependency published nowhere else (see
+ * `JITPACK_REPOSITORY` in transform.ts).
+ */
+export const VENDORED_JVM_REPR_JAR = "vendor/jvm-repr-0.4.0.jar";
+
+/**
  * The defaults `readConfig` falls back to when a setting is unset.
  *
  * Every one of these is also declared in `package.json` under
